@@ -1,30 +1,49 @@
-import os
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from scraper import search_companies
+import requests
+from bs4 import BeautifulSoup
+import re
 
-TOKEN = os.getenv("BOT_TOKEN")
+def search_companies(query):
+    results = []
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("OKED kod yubor: masalan 62010")
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    oked = update.message.text
+    search_url = f"https://www.google.com/search?q={query}+telefon"
 
-    await update.message.reply_text("Qidiryapman...")
+    r = requests.get(search_url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
-    results = search_companies(oked)
+    text = soup.get_text(" ")
 
-    if not results:
-        await update.message.reply_text("Hech narsa topilmadi 😕")
-        return
+    # Telefonlar
+    phones = re.findall(r'\+?\d[\d\s\-\(\)]{7,}\d', text)
 
-    text = "\n\n".join(results)
-    await update.message.reply_text(text[:4000])  # limit Telegram
+    # Telegram username
+    telegrams = re.findall(r'@[\w_]+', text)
 
-app = Application.builder().token(TOKEN).build()
+    results.append({
+        "query": query,
+        "phones": list(set(phones))[:10],
+        "telegrams": list(set(telegrams))[:10]
+    })
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    return results
 
-app.run_polling()
+
+if __name__ == "__main__":
+    q = input("Kategoriya kiriting: ")
+
+    data = search_companies(q)
+
+    for item in data:
+        print("\n=== NATIJA ===")
+        print("Qidiruv:", item["query"])
+
+        print("\nTelefonlar:")
+        for p in item["phones"]:
+            print("-", p)
+
+        print("\nTelegramlar:")
+        for t in item["telegrams"]:
+            print("-", t)
